@@ -5,6 +5,16 @@ const TOKEN = process.env.TOKEN;
 const axios = require("axios");
 const mongoose = require("mongoose");
 
+console.log(
+  "ENV DUMP-",
+  "TOKEN",
+  process.env.TOKEN,
+  "ACCESS_TOKEN",
+  process.env.ACCESS_TOKEN,
+  "MONGO_URL",
+  process.env.MONGO_URL
+);
+
 mongoose
   .connect(process.env.MONGO_URL, {
     useNewUrlParser: true,
