@@ -11,6 +11,7 @@ mongoose
     useUnifiedTopology: true,
     useFindAndModify: false,
   })
+  .catch((e) => console.log(e))
   .then(() => console.log("Connected to MongoDB"));
 
 const UserSchema = {
