@@ -1,0 +1,17 @@
+{
+  "name": "rating-bot",
+  "version": "1.0.0",
+  "description": "Discord bot for WoW RBG ratings",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Rhys Maughan",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "0.21.1",
+    "discord.js": "^11.5.1",
+    "dotenv": "^8.2.0",
+    "mongoose": "^5.11.14"
+  }
+}
