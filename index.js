@@ -79,6 +79,36 @@ bot.on("ready", () => {
 });
 
 bot.on("message", async (msg) => {
+  if (msg.content.toLowerCase().split(" ")[0] === "!search") {
+    const message = msg.content.toLowerCase().split(" ");
+    if (message.length !== 3) {
+      msg.channel.send(
+        "Search information incorrect. Format: !search <character name> <realm-name>"
+      );
+    } else {
+      const character = message[1];
+      const realm = message[2];
+      const avatarData = await axios(
+        `https://eu.api.blizzard.com/profile/wow/character/${realm}/${character}/character-media?namespace=profile-eu&locale=en_EU&access_token=${process.env.ACCESS_TOKEN}`
+      )
+        .then((res) => res.data)
+        .catch((e) => console.log(e));
+      const rbgData = await axios(
+        `https://eu.api.blizzard.com/profile/wow/character/${realm}/${character}/pvp-bracket/rbg?namespace=profile-eu&locale=en_EU&access_token=${process.env.ACCESS_TOKEN}`
+      )
+        .then((res) => res.data)
+        .catch((e) => console.log(e));
+      await msg.channel.send({
+        embed: generateEmbed({
+          player: character,
+          avatar: avatarData.assets[0].value,
+          rating: rbgData.rating,
+          weeklyData: rbgData.weekly_match_statistics,
+          seasonData: rbgData.season_match_statistics,
+        }),
+      });
+    }
+  }
   if (msg.content.toLowerCase().split(" ")[0] === "!register") {
     const message = msg.content.toLowerCase().split(" ");
     if (message.length !== 3) {
@@ -114,7 +144,7 @@ bot.on("message", async (msg) => {
   }
   if (msg.content === "!help") {
     msg.channel.send(
-      "\n__**!help:**__ lists all functions.\n__**!register:**__ register a character, format:- !register <character name> <realm-name>\n__**!rating:**__ returns your registered characters current rating"
+      "\n__**!help:**__ lists all functions.\n__**!register:**__ register a character, format:- !register <character name> <realm-name>\n__**!rating:**__ returns your registered characters current rating\n__**!search:**__ returns a characters rating, format: !search <character name> <realm-name>"
     );
   }
   if (msg.content === "!rating") {
