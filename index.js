@@ -495,20 +495,28 @@ bot.on("message", async (msg) => {
       return;
     }
     console.log(`making rbg request for ${player}`);
-    const threes = await fetchPvPData(player.realm, player.character, "3v3");
+    const threes = await fetchPvPData(
+      player[0].realm,
+      player[0].character,
+      "3v3"
+    );
     if (threes === "error") {
       msg.channel.send(
         "Oops! Looks like something went wrong. Make sure the information is correct."
       );
       return;
     }
-    const twos = await fetchPvPData(player.realm, player.character, "2v2");
+    const twos = await fetchPvPData(
+      player[0].realm,
+      player[0].character,
+      "2v2"
+    );
     await msg.channel.send({
       embed: generateEmbed(
         {
-          character: player.character,
-          realm: player.realm,
-          avatar: await fetchAvatar(player.realm, player.character),
+          character: player[0].character,
+          realm: player[0].realm,
+          avatar: await fetchAvatar(player[0].realm, player[0].character),
           two: {
             rating: twos.rating,
             weeklyData: twos.weekly_match_statistics,
