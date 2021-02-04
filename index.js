@@ -220,10 +220,10 @@ function formatRealmName(realm) {
 }
 
 function formatMessage(message) {
-  const messageArray = message.toLowerCase().split(/[^A-Za-z]/);
+  const messageArray = message.toLowerCase().split(/[^A-Za-z!]/);
   const command = messageArray[0];
   const character = messageArray[1];
-  const realm = messageArray[2];
+  const realm = messageArray.slice(2).join("-");
   return {
     command,
     character,
