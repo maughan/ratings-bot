@@ -181,7 +181,7 @@ bot.on("message", async (msg) => {
   if (message.command === "!register") {
     if (!message.character || !message.realm) {
       msg.channel.send(
-        "Search information incorrect. Format: !search <character name> <realm-name>"
+        "Registration information incorrect. Format: !search <character name> <realm-name>"
       );
     } else {
       const foundUser = await UserModel.findOne({ id: msg.author.id });
