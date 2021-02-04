@@ -5,16 +5,6 @@ const TOKEN = process.env.TOKEN;
 const axios = require("axios");
 const mongoose = require("mongoose");
 
-console.log(
-  "ENV DUMP-",
-  "TOKEN",
-  process.env.TOKEN,
-  "ACCESS_TOKEN",
-  process.env.ACCESS_TOKEN,
-  "MONGO_URL",
-  process.env.MONGO_URL
-);
-
 mongoose
   .connect(process.env.MONGO_URL, {
     useNewUrlParser: true,
@@ -30,18 +20,65 @@ const UserSchema = {
   realm: String,
 };
 
+let ACCESS_TOKEN = "14242";
+
+async function refreshToken() {
+  console.log("refreshing token");
+  const res = await axios({
+    method: "post",
+    url: "https://us.battle.net/oauth/token",
+    headers: {
+      Authorization:
+        "Basic NmNhM2U3YjE2ZjI0NGI1YzkwNWNlOTg5NmIyNmQ5Nzg6U05wOVBVMGV0RmxiNTBPTk05WDI2YVpUZG0wMTZHSEw=",
+      "content-type": "application/x-www-form-urlencoded",
+    },
+    data: "grant_type=client_credentials",
+  })
+    .then((res) => res)
+    .catch((e) => console.log("error:" + e));
+  if (res) {
+    ACCESS_TOKEN = res.data.access_token;
+  }
+}
+
+async function handleAuthentication(url) {
+  await refreshToken();
+  return await axios(url + ACCESS_TOKEN)
+    .then((res) => res)
+    .catch((e) => console.log(e.message));
+}
+
+function capitalize(word) {
+  return word.charAt(0).toUpperCase() + word.slice(1);
+}
+
+function formatRealmName(realm) {
+  return realm
+    .split("-")
+    .map((word) => capitalize(word))
+    .filter((char) => char !== "-")
+    .join(" ");
+}
+
+function formatMessage(message) {
+  const messageArray = message.split(" ");
+  const command = messageArray[0];
+  const character = messageArray[1];
+  const realm = messageArray[2];
+  return {
+    command,
+    character,
+    realm,
+  };
+}
+
 const UserModel = mongoose.model("User", UserSchema);
 
 const generateEmbed = (data) => {
   return {
     color: 0x0099ff,
-    title:
-      data.player.charAt(0).toUpperCase() +
-      data.player.slice(1) +
-      "- Emerald Dream",
-    url:
-      "https://worldofwarcraft.com/en-gb/character/eu/emerald-dream/" +
-      data.player,
+    title: capitalize(data.character) + " - " + formatRealmName(data.realm),
+    url: `https://worldofwarcraft.com/en-gb/character/eu/${data.realm}/${data.character}`,
     thumbnail: {
       url: data.avatar,
     },
@@ -72,6 +109,36 @@ const generateEmbed = (data) => {
   };
 };
 
+async function fetchAvatar(realm, character) {
+  const url = `https://eu.api.blizzard.com/profile/wow/character/${realm}/${character}/character-media?namespace=profile-eu&locale=en_EU&access_token=`;
+  const res = await axios(url + ACCESS_TOKEN)
+    .then(async (res) =>
+      res.status === 401 ? await handleAuthentication(url) : res
+    )
+    .catch(async (e) =>
+      e.response.status === 401
+        ? await handleAuthentication(url)
+        : console.log(e.message)
+    );
+
+  return res.data.assets[0].value;
+}
+
+async function fetchPvPData(realm, character, bracket) {
+  const url = `https://eu.api.blizzard.com/profile/wow/character/${realm}/${character}/pvp-bracket/${bracket}?namespace=profile-eu&locale=en_EU&access_token=`;
+  const res = await axios(url + ACCESS_TOKEN)
+    .then(async (res) =>
+      res.status === 401 ? await handleAuthentication(url) : res
+    )
+    .catch(async (e) =>
+      e.response.status === 401
+        ? await handleAuthentication(url)
+        : console.log(e.message)
+    );
+
+  return res.data;
+}
+
 bot.login(TOKEN);
 
 bot.on("ready", () => {
@@ -79,29 +146,27 @@ bot.on("ready", () => {
 });
 
 bot.on("message", async (msg) => {
-  if (msg.content.toLowerCase().split(" ")[0] === "!search") {
-    const message = msg.content.toLowerCase().split(" ");
-    if (message.length !== 3) {
+  const message = formatMessage(msg.content);
+
+  // SEARCH
+  // -------------------------------
+
+  if (message.command === "!search") {
+    if (!message.character || !message.realm) {
       msg.channel.send(
         "Search information incorrect. Format: !search <character name> <realm-name>"
       );
     } else {
-      const character = message[1];
-      const realm = message[2];
-      const avatarData = await axios(
-        `https://eu.api.blizzard.com/profile/wow/character/${realm}/${character}/character-media?namespace=profile-eu&locale=en_EU&access_token=${process.env.ACCESS_TOKEN}`
-      )
-        .then((res) => res.data)
-        .catch((e) => console.log(e));
-      const rbgData = await axios(
-        `https://eu.api.blizzard.com/profile/wow/character/${realm}/${character}/pvp-bracket/rbg?namespace=profile-eu&locale=en_EU&access_token=${process.env.ACCESS_TOKEN}`
-      )
-        .then((res) => res.data)
-        .catch((e) => console.log(e));
+      const rbgData = await fetchPvPData(
+        message.realm,
+        message.character,
+        "rbg"
+      );
       await msg.channel.send({
         embed: generateEmbed({
-          player: character,
-          avatar: avatarData.assets[0].value,
+          character: message.character,
+          realm: message.realm,
+          avatar: await fetchAvatar(message.realm, message.character),
           rating: rbgData.rating,
           weeklyData: rbgData.weekly_match_statistics,
           seasonData: rbgData.season_match_statistics,
@@ -109,64 +174,60 @@ bot.on("message", async (msg) => {
       });
     }
   }
-  if (msg.content.toLowerCase().split(" ")[0] === "!register") {
-    const message = msg.content.toLowerCase().split(" ");
-    if (message.length !== 3) {
+
+  // REGISTER
+  // -------------------------------
+
+  if (message.command === "!register") {
+    if (!message.character || !message.realm) {
       msg.channel.send(
-        "Registration information incorrect. Format: !register <character name> <realm-name>"
+        "Search information incorrect. Format: !search <character name> <realm-name>"
       );
     } else {
-      const character = message[1];
-      const realm = message[2];
       const foundUser = await UserModel.findOne({ id: msg.author.id });
       if (foundUser) {
         msg.reply("you already have a character registered");
       } else {
         const user = await UserModel.create({
           id: msg.author.id,
-          character,
-          realm,
+          character: message.character,
+          realm: message.realm,
         });
         await user.save((err) => err && console.log(err));
         msg.reply(
-          `character registered successfully: ${
-            character.charAt(0).toUpperCase() + character.slice(1)
-          } - ${
-            realm.split("-")[0].charAt(0).toUpperCase() +
-            realm.split("-")[0].slice(1) +
-            " " +
-            realm.split("-")[1].charAt(0).toUpperCase() +
-            realm.split("-")[1].slice(1)
-          }`
+          `character registered successfully: ${capitalize(
+            message.character
+          )} - ${formatRealmName(message.realm)}`
         );
       }
     }
   }
-  if (msg.content === "!help") {
+
+  // HELP
+  // -------------------------------
+
+  if (message.command === "!help") {
     msg.channel.send(
-      "\n__**!help:**__ lists all functions.\n__**!register:**__ register a character, format:- !register <character name> <realm-name>\n__**!rating:**__ returns your registered characters current rating\n__**!search:**__ returns a characters rating, format: !search <character name> <realm-name>"
+      "\n__**!help:**__ lists all functions.\n__**!rbg:**__ register a character, format:- !register <character name> <realm-name>\n__**!rating:**__ returns your registered characters current rating\n__**!search:**__ returns a characters rating, format: !search <character name> <realm-name>"
     );
   }
-  if (msg.content === "!rating") {
+
+  // RATING
+  // -------------------------------
+
+  if (message.command === "!rbg") {
     const player = await UserModel.findOne({ id: msg.author.id });
     if (!player) {
       msg.reply("No character registered");
     }
     console.log("making request for", player);
-    const avatarData = await axios(
-      `https://eu.api.blizzard.com/profile/wow/character/${player.realm}/${player.character}/character-media?namespace=profile-eu&locale=en_EU&access_token=${process.env.ACCESS_TOKEN}`
-    )
-      .then((res) => res.data)
-      .catch((e) => console.log(e));
-    const rbgData = await axios(
-      `https://eu.api.blizzard.com/profile/wow/character/${player.realm}/${player.character}/pvp-bracket/rbg?namespace=profile-eu&locale=en_EU&access_token=${process.env.ACCESS_TOKEN}`
-    )
-      .then((res) => res.data)
-      .catch((e) => console.log(e));
+
+    const rbgData = await fetchPvPData(player.realm, player.character, "rbg");
     await msg.channel.send({
       embed: generateEmbed({
-        player: player.character,
-        avatar: avatarData.assets[0].value,
+        character: player.character,
+        realm: player.realm,
+        avatar: await fetchAvatar(player.realm, player.character),
         rating: rbgData.rating,
         weeklyData: rbgData.weekly_match_statistics,
         seasonData: rbgData.season_match_statistics,
