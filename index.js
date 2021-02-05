@@ -358,6 +358,33 @@ const generateEmbed = (data, type) => {
             "https://avatars.githubusercontent.com/u/40720420?s=460&u=988adec866a594eaa04d45c39ca090d1dbe6564d&v=4",
         },
       };
+    case "rio":
+      return {
+        color: 0x0099ff,
+        title: capitalize(data.character) + " - " + formatRealmName(data.realm),
+        url: `https://worldofwarcraft.com/en-gb/character/eu/${data.realm}/${data.character}`,
+        thumbnail: {
+          url: data.avatar,
+        },
+        fields: [
+          {
+            name: "Raider.io score",
+            value: data.score,
+            inline: true,
+          },
+          {
+            name: "Raid progress",
+            value: data.raid,
+            inline: true,
+          },
+        ],
+        timestamp: new Date(),
+        footer: {
+          text: "!rating - Trapjaw",
+          icon_url:
+            "https://avatars.githubusercontent.com/u/40720420?s=460&u=988adec866a594eaa04d45c39ca090d1dbe6564d&v=4",
+        },
+      };
   }
 };
 
@@ -379,6 +406,21 @@ async function fetchAvatar(realm, character) {
 async function fetchCharacterDetails(realm, character) {
   const url = `https://eu.api.blizzard.com/profile/wow/character/${realm}/${character}/appearance?namespace=profile-eu&locale=en_EU&access_token=`;
   const res = await axios(url + ACCESS_TOKEN)
+    .then(async (res) =>
+      res.status === 401 ? await handleAuthentication(url) : res
+    )
+    .catch(async (e) =>
+      e.response.status === 401
+        ? await handleAuthentication(url)
+        : { data: "error" }
+    );
+
+  return res.data;
+}
+
+async function fetchRio(realm, character) {
+  const url = `https://raider.io/api/v1/characters/profile?region=eu&realm=${realm}&name=${character}&fields=mythic_plus_scores_by_season%3Acurrent%2Craid_progression`;
+  const res = await axios(url)
     .then(async (res) =>
       res.status === 401 ? await handleAuthentication(url) : res
     )
@@ -480,7 +522,7 @@ bot.on("message", async (msg) => {
 
   if (message.command === "!arena") {
     let player = message.character
-      ? await UserModel.findOne({
+      ? await UserModel.find({
           id: msg.author.id,
           character: message.character,
         })
@@ -608,7 +650,7 @@ bot.on("message", async (msg) => {
           id: msg.author.id,
           character: message.character,
         })
-      : await UserModel.findOne({ id: msg.author.id });
+      : await UserModel.find({ id: msg.author.id });
     if (!player && !message.character) {
       msg.reply("No character registered");
     }
@@ -618,9 +660,13 @@ bot.on("message", async (msg) => {
       );
       return;
     }
-    console.log(`making rbg request for ${player}`);
+    console.log(`making rbg request for ${player[0]}`);
 
-    const rbgData = await fetchPvPData(player.realm, player.character, "rbg");
+    const rbgData = await fetchPvPData(
+      player[0].realm,
+      player[0].character,
+      "rbg"
+    );
     if (rbgData === "error") {
       msg.channel.send(
         "Oops! Looks like something went wrong. Make sure the information is correct."
@@ -630,14 +676,48 @@ bot.on("message", async (msg) => {
     await msg.channel.send({
       embed: generateEmbed(
         {
-          character: player.character,
-          realm: player.realm,
-          avatar: await fetchAvatar(player.realm, player.character),
+          character: player[0].character,
+          realm: player[0].realm,
+          avatar: await fetchAvatar(player[0].realm, player[0].character),
           rating: rbgData.rating,
           weeklyData: rbgData.weekly_match_statistics,
           seasonData: rbgData.season_match_statistics,
         },
         "rbg"
+      ),
+    });
+  }
+
+  if (message.command === "!rio") {
+    const player = message.character
+      ? await UserModel.find({
+          id: msg.author.id,
+          character: message.character,
+        })
+      : await UserModel.find({ id: msg.author.id });
+    if (!player && !message.character) {
+      msg.reply("No character registered");
+    }
+    if (player.length > 1) {
+      msg.reply(
+        `you have ${player.length} characters registered. Please use !rio <character name>`
+      );
+      return;
+    }
+    console.log(`making rio request for ${player[0]}`);
+
+    const rioData = await fetchRio(player[0].realm, player[0].character);
+
+    await msg.channel.send({
+      embed: generateEmbed(
+        {
+          character: player[0].character,
+          realm: player[0].realm,
+          avatar: rioData.thumbnail_url,
+          score: rioData.mythic_plus_scores_by_season[0].scores.all.toString(),
+          raid: rioData.raid_progression["castle-nathria"].summary,
+        },
+        "rio"
       ),
     });
   }
