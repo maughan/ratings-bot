@@ -1,9 +1,10 @@
-require("dotenv").config();
-const Discord = require("discord.js");
-const bot = new Discord.Client();
-const TOKEN = process.env.TOKEN;
-const axios = require("axios");
-const mongoose = require("mongoose");
+import "dotenv.config";
+
+import { Client } from "discord.js";
+import axios from "axios";
+import mongoose from "mongoose";
+
+import { UserModel } from "./models/user";
 
 mongoose
   .connect(process.env.MONGO_URL, {
@@ -14,13 +15,7 @@ mongoose
   .catch((e) => console.log(e))
   .then(() => console.log("Connected to MongoDB"));
 
-const UserSchema = {
-  id: String,
-  character: String,
-  realm: String,
-};
-
-let ACCESS_TOKEN = "14242";
+let ACCESS_TOKEN = "";
 
 async function refreshToken() {
   console.log("refreshing token");
@@ -230,8 +225,6 @@ function formatMessage(message) {
     realm,
   };
 }
-
-const UserModel = mongoose.model("User", UserSchema);
 
 const generateEmbed = (data, type) => {
   switch (type) {
@@ -449,13 +442,16 @@ async function fetchPvPData(realm, character, bracket) {
   return res.data;
 }
 
-bot.login(TOKEN);
+const client = new Client();
+const TOKEN = process.env.TOKEN;
 
-bot.on("ready", () => {
-  console.info(`Logged in as ${bot.user.tag}!`);
+client.login(TOKEN);
+
+client.on("ready", () => {
+  console.info(`Logged in as ${client.user.tag}!`);
 });
 
-bot.on("message", async (msg) => {
+client.on("message", async (msg) => {
   const message = formatMessage(msg.content);
 
   // SEARCH
